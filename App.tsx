@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { ReelPlayer } from './components/ReelPlayer';
@@ -41,7 +40,7 @@ const App: React.FC = () => {
   const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const [pendingContent, setPendingContent] = useState<GeneratedContent | null>(null);
   const isManualModeRef = useRef(false);
-  const manualTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const manualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Settings State
   const [apiKey, setApiKey] = useState(() => {
@@ -330,7 +329,7 @@ const App: React.FC = () => {
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-[2px]">
                                     <a href="https://prasannathapa.in" target="_blank">
-                                      <img src="https://blog.prasannathapa.in/content/images/2024/12/Picsart_24-12-18_08-13-50-070.jpg" alt="Prasanna Thapa" className="rounded-full w-full h-full object-cover bg-black" />
+                                    <img src="https://blog.prasannathapa.in/content/images/2024/12/Picsart_24-12-18_08-13-50-070.jpg" alt="Prasanna Thapa" className="rounded-full w-full h-full object-cover bg-black" />
                                     </a>
                                 </div>
                                 <div>
@@ -338,7 +337,7 @@ const App: React.FC = () => {
                                     <div className="text-xs text-gray-400 flex items-center gap-1.5">
                                         Technical Architect |
                                         <a href="https://zoho.com" target="_blank">
-                                          <img src="https://www.zohowebstatic.com/sites/default/files/zoho_general_pages/zoho-logo-white.png" alt="Zoho" className="h-3" />
+                                        <img src="https://www.zohowebstatic.com/sites/default/files/zoho_general_pages/zoho-logo-white.png" alt="Zoho" className="h-3" />
                                         </a>
                                     </div>
                                 </div>

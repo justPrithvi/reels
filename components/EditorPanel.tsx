@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { GeneratedContent, LayoutConfigStep } from '../types';
 import { Code, Layout, Settings, Save, Download, Music, ExternalLink, Copy, CheckCircle2, Sparkles, MessageSquare, Trash2, FileAudio, Key, Edit2, X, Check, Bot, Zap, Cpu, BrainCircuit, ShieldAlert, Lock, RefreshCw } from 'lucide-react';
@@ -260,9 +259,14 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                    <div className="space-y-1">
                       <div className="flex justify-between">
                           <label className="text-xs text-gray-400">Custom API Key</label>
-                          {isDefaultKey && (
-                              <span className="text-[10px] text-green-400">Currently on Free Tier</span>
-                          )}
+                          <div className="flex gap-2">
+                             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                                <ExternalLink size={10} /> Get Free Key
+                             </a>
+                             {isDefaultKey && (
+                                <span className="text-[10px] text-green-400">Currently on Free Tier</span>
+                             )}
+                          </div>
                       </div>
                       <input 
                         type="password"
@@ -283,9 +287,6 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                          <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
-                         <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                         <option value="gemini-3-pro-preview">Gemini 3.0 Pro Preview</option>
-                         <option value="gemini-3-flash-preview">Gemini 3.0 Flash Preview</option>
                          <option value="custom">Custom...</option>
                       </select>
                       {tempModel === 'custom' && (

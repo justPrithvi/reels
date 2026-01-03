@@ -123,9 +123,10 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                   Enter Manual Mode (No AI)
                 </button>
                 
-                <div 
+                <button 
+                    type="button"
                     onClick={() => setManualModePermanent(!manualModePermanent)}
-                    className="flex items-center gap-2 cursor-pointer group select-none"
+                    className="flex items-center gap-2 cursor-pointer group select-none hover:bg-gray-800/50 px-3 py-1.5 rounded-lg transition-colors outline-none"
                 >
                     <div className="text-gray-600 group-hover:text-purple-500 transition-colors">
                         {manualModePermanent ? <CheckSquare size={14} /> : <Square size={14} />}
@@ -133,7 +134,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                     <span className="text-[10px] text-gray-600 group-hover:text-gray-400 transition-colors">
                         Don't ask again (Always start in Manual Mode)
                     </span>
-                </div>
+                </button>
              </div>
           </div>
         ) : (
@@ -150,7 +151,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                 </div>
                 
                 <div className="space-y-2">
-                    <label className="text-xs text-gray-400">Gemini API Key</label>
+                    <div className="flex justify-between items-center">
+                        <label className="text-xs text-gray-400">Gemini API Key</label>
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                            <ExternalLink size={10} /> Get Free Key
+                        </a>
+                    </div>
                     <div className="relative group">
                         <input
                         type="password"
@@ -173,10 +179,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         <option value="gemini-2.5-flash">Gemini 2.5 Flash (Best Balance - Default)</option>
                         <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Fastest, Higher Limits)</option>
                         <option value="gemini-2.5-pro">Gemini 2.5 Pro (Complex Scenes, Lower Limits)</option>
-                        <option value="gemini-3-pro-preview">Gemini 3.0 Pro Preview (Most Complex, Low Limits)</option>
-                        <option value="gemini-3-flash-preview">Gemini 3.0 Flash Preview (Experimental)</option>
-                        <option value="gemini-2.0-flash">Gemini 2.0 Flash (Stable)</option>
-                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite (Stable)</option>
                         <option value="custom">Custom...</option>
                     </select>
 
