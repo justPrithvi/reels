@@ -26,6 +26,7 @@ const App: React.FC = () => {
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
+  const [isAudioOnly, setIsAudioOnly] = useState(false); // Track if using dummy video/audio only
   const [srtData, setSrtData] = useState<SRTItem[]>([]);
   const [srtTextRaw, setSrtTextRaw] = useState<string>('');
   const [topicContext, setTopicContext] = useState(''); 
@@ -109,9 +110,10 @@ const App: React.FC = () => {
     setAppState(AppState.UPLOAD);
   };
 
-  const handleFilesSelected = async (video: File, srt: File) => {
+  const handleFilesSelected = async (video: File, srt: File, isAudioMode: boolean) => {
     try {
       setVideoFile(video);
+      setIsAudioOnly(isAudioMode);
       const srtText = await srt.text();
       setSrtTextRaw(srtText);
       const parsedSrt = parseSRT(srtText);
@@ -144,7 +146,8 @@ const App: React.FC = () => {
            apiKey, 
            modelName,
            existingHtml,
-           existingLayout
+           existingLayout,
+           isAudioOnly
        );
        setGeneratedContent(content);
        // Clear refinement text after success? Optional. Keeping it allows user to iterate.
@@ -193,7 +196,7 @@ const App: React.FC = () => {
     
     try {
       // Initial Generation - No existing content yet
-      const content = await generateReelContent(currentSrtRaw, currentTopic, apiKey, modelName);
+      const content = await generateReelContent(currentSrtRaw, currentTopic, apiKey, modelName, undefined, undefined, isAudioOnly);
       
       if (isManualModeRef.current) {
           // User already entered manual mode, ask to replace
@@ -301,6 +304,7 @@ const App: React.FC = () => {
                         setBgMusicFile(null);
                         setPendingContent(null);
                         setShowReplaceDialog(false);
+                        setIsAudioOnly(false); // Reset
                         }} 
                         className="hover:text-white transition-colors"
                     >
@@ -308,7 +312,7 @@ const App: React.FC = () => {
                     </button>
                     )}
                     <div className="w-px h-4 bg-gray-700"></div>
-                    <span className="text-xs uppercase tracking-widest text-purple-400">v1 Public Preview</span>
+                    <span className="text-xs tracking-widest text-purple-400">Verson 1.2 </span>
                 </div>
                 </header>
             )}
@@ -320,7 +324,7 @@ const App: React.FC = () => {
                 {appState === AppState.UPLOAD && (
                 <div className="flex flex-col h-full overflow-y-auto">
                     <div className="flex-1">
-                        <FileUpload onFilesSelected={handleFilesSelected} />
+                        <FileUpload onFilesSelected={handleFilesSelected} apiKey={apiKey} />
                     </div>
 
                     {/* Author / About Section */}
@@ -378,7 +382,9 @@ const App: React.FC = () => {
                             </div>
                             <h2 className="text-3xl font-bold">Director's Studio</h2>
                             <p className="text-gray-400 max-w-md mx-auto">
-                            Describe your video topic. We'll copy this prompt to your clipboard and auto-generate the initial animation scene.
+                            {isAudioOnly 
+                               ? "Audio-Only Mode: We will generate full-screen visuals to accompany your script." 
+                               : "Describe your video topic. We'll copy this prompt to your clipboard and auto-generate the initial animation scene."}
                             </p>
                         </div>
 
@@ -387,7 +393,7 @@ const App: React.FC = () => {
                         <textarea 
                             value={topicContext}
                             onChange={(e) => setTopicContext(e.target.value)}
-                            placeholder="e.g. This video explains Quantum Tunneling. I want particles passing through barriers..."
+                            placeholder={isAudioOnly ? "e.g. Visuals should be about space exploration, with planets and stars." : "e.g. This video explains Quantum Tunneling. I want particles passing through barriers..."}
                             className="w-full h-32 bg-gray-900 border border-gray-700 rounded-xl p-4 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition-all"
                         />
                         </div>

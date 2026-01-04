@@ -1,4 +1,5 @@
-export const extractWavFromVideo = async (videoFile: File): Promise<void> => {
+
+export const extractAudioBlob = async (videoFile: File): Promise<Blob> => {
   try {
     const arrayBuffer = await videoFile.arrayBuffer();
     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -51,16 +52,68 @@ export const extractWavFromVideo = async (videoFile: File): Promise<void> => {
       pos++;
     }
 
-    const blob = new Blob([buffer], {type: "audio/wav"});
+    return new Blob([buffer], {type: "audio/wav"});
+    
+  } catch (e) {
+    console.error("Audio extraction error:", e);
+    throw new Error("Failed to extract audio. Browser may not support decoding this video format.");
+  }
+};
+
+export const extractWavFromVideo = async (videoFile: File): Promise<void> => {
+    const blob = await extractAudioBlob(videoFile);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `extracted_audio_${Date.now()}.wav`;
     a.click();
     URL.revokeObjectURL(url);
-    
-  } catch (e) {
-    console.error("Audio extraction error:", e);
-    throw new Error("Failed to extract audio. Browser may not support decoding this video format.");
+};
+
+export const fileToBase64 = (file: File | Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove data url prefix (e.g. "data:audio/mp3;base64,")
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+const writeString = (view: DataView, offset: number, string: string) => {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
   }
+};
+
+export const pcmToWav = (pcmData: Uint8Array, sampleRate: number = 24000, numChannels: number = 1): Blob => {
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  const totalDataLen = pcmData.length;
+
+  // RIFF chunk descriptor
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + totalDataLen, true);
+  writeString(view, 8, 'WAVE');
+
+  // fmt sub-chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
+  view.setUint16(20, 1, true); // AudioFormat (1 for PCM)
+  view.setUint16(22, numChannels, true); // NumChannels
+  view.setUint32(24, sampleRate, true); // SampleRate
+  view.setUint32(28, sampleRate * numChannels * 2, true); // ByteRate
+  view.setUint16(32, numChannels * 2, true); // BlockAlign
+  view.setUint16(34, 16, true); // BitsPerSample (16 bits)
+
+  // data sub-chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, totalDataLen, true);
+
+  const blob = new Blob([header, pcmData], { type: 'audio/wav' });
+  return blob;
 };

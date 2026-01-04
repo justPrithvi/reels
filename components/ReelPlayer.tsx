@@ -107,8 +107,9 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
       width: '90%', 
       display: 'flex',
       justifyContent: 'center',
+      textAlign: 'center',
       pointerEvents: 'none',
-      zIndex: 50,
+      zIndex: 50, // Ensure high Z-index
       transition: 'top 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
     };
 
@@ -132,33 +133,57 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
 
   const layoutStyles = getLayoutStyles();
   const captionStyle = getCaptionStyle();
+  const isFullHtml = currentLayout.layoutMode === 'full-html';
 
-  // --- Word-by-Word Animation Logic ---
+  // --- Word-by-Word Animation Logic (With Chunking) ---
   const renderAnimatedCaption = () => {
     if (!currentCaption) return null;
 
-    const words = currentCaption.text.split(' ');
+    const WORDS_PER_VIEW = 5; // Max words to show at once
+    
+    // Split full text into words
+    const allWords = currentCaption.text.split(' ');
+    
+    // Calculate progress through the current segment (0 to 1)
     const duration = currentCaption.endTime - currentCaption.startTime;
     const elapsed = currentTime - currentCaption.startTime;
     const progress = Math.max(0, Math.min(1, elapsed / duration));
-    const activeIndex = Math.floor(progress * words.length);
+    
+    // Determine which word is currently being spoken (Global Index)
+    const globalActiveIndex = Math.floor(progress * allWords.length);
+
+    // Determine which "Page" (Chunk) of words we are on
+    const currentChunkIndex = Math.floor(globalActiveIndex / WORDS_PER_VIEW);
+    
+    // Slice the array to get only the current chunk
+    const startWordIndex = currentChunkIndex * WORDS_PER_VIEW;
+    const endWordIndex = startWordIndex + WORDS_PER_VIEW;
+    const visibleWords = allWords.slice(startWordIndex, endWordIndex);
 
     return (
-      <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 px-4 py-2">
-        {words.map((word, index) => {
-          const isActive = index === activeIndex;
-          const isPast = index < activeIndex;
+      <div 
+        className={`flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 px-4 py-2 rounded-2xl transition-all duration-300 ${isFullHtml ? 'bg-black/80 backdrop-blur-md border border-white/10 shadow-2xl' : ''}`}
+        style={{ minHeight: '60px' }} // STABILITY: Prevent layout shifts
+      >
+        {visibleWords.map((word, index) => {
+          // Calculate the true index of this word in the original full sentence
+          const trueIndex = startWordIndex + index;
+          
+          const isActive = trueIndex === globalActiveIndex;
+          const isPast = trueIndex < globalActiveIndex;
           
           return (
             <span 
-              key={`${currentCaption.id}-${index}`}
+              key={`${currentCaption.id}-${trueIndex}`}
               className={`
-                transition-all duration-75 inline-block text-lg md:text-xl font-bold
+                transition-all duration-150 inline-block text-2xl md:text-2xl font-black tracking-wide leading-tight
                 ${isActive ? 'text-yellow-400 scale-110' : ''}
-                ${isPast ? 'text-white' : 'text-white/40 blur-[0.5px]'}
+                ${isPast ? 'text-white' : 'text-white/40'}
               `}
               style={{
-                textShadow: isActive ? '0 0 15px rgba(250, 204, 21, 0.6)' : '0 1px 2px rgba(0,0,0,0.8)'
+                textShadow: isActive 
+                    ? '0 0 30px rgba(250, 204, 21, 0.6), 2px 2px 0px rgba(0,0,0,1)' 
+                    : '2px 2px 0px rgba(0,0,0,0.8)'
               }}
             >
               {word}
@@ -482,7 +507,9 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
         {currentCaption && (
           <div style={captionStyle}>
             <div className="relative group max-w-[95%]">
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-md rounded-xl -z-10 shadow-lg border border-white/5" />
+              {!isFullHtml && (
+                 <div className="absolute inset-0 bg-black/60 backdrop-blur-md rounded-xl -z-10 shadow-lg border border-white/5" />
+              )}
               {renderAnimatedCaption()}
             </div>
           </div>
