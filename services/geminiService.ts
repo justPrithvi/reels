@@ -89,7 +89,7 @@ export const generateSRT = async (
             
             CRITICAL RULES:
             1. Timestamps must align perfectly with the audio waveform. 
-            2. Break text into naturally spoken short chunks (max 4-6 words per chunk).
+            2. Break text into naturally spoken short chunks (max 3-5 words per chunk).
             3. Do NOT hallucinate. Only transcribe what is clearly spoken.
             4. If there is silence, do not create segments.
             `
@@ -118,7 +118,8 @@ export const generateSRT = async (
     return srtOutput.trim();
   } catch (error: any) {
     console.error("SRT Generation Error:", error);
-    throw new Error("Failed to auto-generate subtitles. Please use Transcri.io.");
+    // Propagate the actual error message from the API so the UI can display "Payload too large" etc.
+    throw new Error(error.message || "Failed to auto-generate subtitles.");
   }
 };
 

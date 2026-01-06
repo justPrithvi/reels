@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { ReelPlayer } from './components/ReelPlayer';
@@ -5,7 +6,7 @@ import { EditorPanel } from './components/EditorPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { parseSRT } from './utils/srtParser';
 import { AppState, GeneratedContent, SRTItem } from './types';
-import { Edit3, AlertCircle, LayoutTemplate, CheckCircle2, Globe, Github, Linkedin, Instagram, Facebook, BookOpen, X, Sparkles, Smartphone, Monitor } from 'lucide-react';
+import { Edit3, AlertCircle, LayoutTemplate, CheckCircle2, Globe, Github, Linkedin, Instagram, Facebook, BookOpen, X, Sparkles, Smartphone, Monitor, ArrowLeft, Key } from 'lucide-react';
 import { generateReelContent } from './services/geminiService';
 import { APP_CONFIG } from './config';
 import { constructPrompt, EXAMPLE_SRT, EXAMPLE_TOPIC, EXAMPLE_HTML, EXAMPLE_JSON } from './utils/promptTemplates';
@@ -108,6 +109,18 @@ const App: React.FC = () => {
       }
     }
     setAppState(AppState.UPLOAD);
+  };
+
+  const handleResetAuth = () => {
+    // Return to welcome screen.
+    // NOTE: We do NOT clear the API Key from localStorage or state here.
+    // This allows the Welcome Screen to pre-populate the existing key for editing.
+    setAppState(AppState.WELCOME);
+    
+    // Reset file states
+    setGeneratedContent(null);
+    setVideoFile(null);
+    setSrtData([]);
   };
 
   const handleFilesSelected = async (video: File, srt: File, isAudioMode: boolean) => {
@@ -213,17 +226,23 @@ const App: React.FC = () => {
       // If user is already in manual mode, ignore errors (they are editing demo content)
       if (!isManualModeRef.current) {
           // FALLBACK TO PREDEFINED SAMPLE
-          try {
-            const fallbackContent: GeneratedContent = {
-              html: EXAMPLE_HTML,
-              layoutConfig: JSON.parse(EXAMPLE_JSON),
-              reasoning: "Fallback to Demo Content (API Error or Quota Exceeded)"
-            };
-            setGeneratedContent(fallbackContent);
-            setAppState(AppState.EDITOR);
-          } catch (fallbackErr) {
-            console.error("Fallback failed", fallbackErr);
-            setError(err.message || "Failed to generate initial content.");
+          // However, if it's a specific API error (like 429), we want to show it.
+          if (err.message && (err.message.includes("429") || err.message.includes("API Key") || err.message.includes("Quota"))) {
+             setError(err.message);
+          } else {
+            // Only fallback on generic/unknown errors, or if user prefers fallback flow
+             try {
+                const fallbackContent: GeneratedContent = {
+                  html: EXAMPLE_HTML,
+                  layoutConfig: JSON.parse(EXAMPLE_JSON),
+                  reasoning: "Fallback to Demo Content (API Error or Quota Exceeded)"
+                };
+                setGeneratedContent(fallbackContent);
+                setAppState(AppState.EDITOR);
+              } catch (fallbackErr) {
+                console.error("Fallback failed", fallbackErr);
+                setError(err.message || "Failed to generate initial content.");
+              }
           }
       }
     } finally {
@@ -289,14 +308,25 @@ const App: React.FC = () => {
         ) : (
             <div className="w-full h-screen flex flex-col bg-gray-950 text-white overflow-hidden relative">
             
-            {/* Header */}
-            {!isFullScreen && (
+            {/* Header (Simplified - Only show 'Change Key' button if not in UPLOAD/WELCOME to avoid duplication) */}
+            {!isFullScreen && appState !== AppState.UPLOAD && (
                 <header className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-black/50 backdrop-blur-sm z-10 shrink-0">
                 <div className="font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">
                     Reel Composer
                 </div>
                 <div className="flex items-center gap-4 text-sm text-gray-400">
-                    {appState !== AppState.UPLOAD && (
+                    
+                    <button 
+                        onClick={handleResetAuth}
+                        className="flex items-center gap-2 hover:text-white transition-colors"
+                        title="Reset API Key"
+                    >
+                        <Key size={16} />
+                        <span className="hidden lg:inline">Change Key</span>
+                    </button>
+
+                    <div className="w-px h-4 bg-gray-700"></div>
+
                     <button 
                         onClick={() => {
                         setAppState(AppState.UPLOAD);
@@ -310,9 +340,8 @@ const App: React.FC = () => {
                     >
                         New Project
                     </button>
-                    )}
                     <div className="w-px h-4 bg-gray-700"></div>
-                    <span className="text-xs tracking-widest text-purple-400">Verson 1.2 </span>
+                    <span className="text-xs uppercase tracking-widest text-purple-400">v1.2.5</span>
                 </div>
                 </header>
             )}
@@ -324,50 +353,11 @@ const App: React.FC = () => {
                 {appState === AppState.UPLOAD && (
                 <div className="flex flex-col h-full overflow-y-auto">
                     <div className="flex-1">
-                        <FileUpload onFilesSelected={handleFilesSelected} apiKey={apiKey} />
-                    </div>
-
-                    {/* Author / About Section */}
-                    <div className="border-t border-gray-800 bg-black/20 p-6">
-                        <div className="max-w-2xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-[2px]">
-                                    <a href="https://prasannathapa.in" target="_blank">
-                                    <img src="https://blog.prasannathapa.in/content/images/2024/12/Picsart_24-12-18_08-13-50-070.jpg" alt="Prasanna Thapa" className="rounded-full w-full h-full object-cover bg-black" />
-                                    </a>
-                                </div>
-                                <div>
-                                    <div className="font-bold text-white">Prasanna Thapa</div>
-                                    <div className="text-xs text-gray-400 flex items-center gap-1.5">
-                                        Technical Architect |
-                                        <a href="https://zoho.com" target="_blank">
-                                        <img src="https://www.zohowebstatic.com/sites/default/files/zoho_general_pages/zoho-logo-white.png" alt="Zoho" className="h-3" />
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div className="flex flex-wrap justify-center gap-4">
-                                <a href="https://prasannathapa.in/" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-purple-400 transition-colors" title="Website">
-                                <Globe size={18} />
-                                </a>
-                                <a href="https://github.com/prasannathapa" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white transition-colors" title="GitHub">
-                                <Github size={18} />
-                                </a>
-                                <a href="https://www.linkedin.com/in/prasannathapa" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-400 transition-colors" title="LinkedIn">
-                                <Linkedin size={18} />
-                                </a>
-                                <a href="https://instagram.com/prasanna_thapa" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-pink-400 transition-colors" title="Instagram">
-                                <Instagram size={18} />
-                                </a>
-                                <a href="https://facebook.com/prasannathapa.cs" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-500 transition-colors" title="Facebook">
-                                <Facebook size={18} />
-                                </a>
-                                <a href="https://blog.prasannathapa.in" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-green-400 transition-colors" title="Blog">
-                                <BookOpen size={18} />
-                                </a>
-                            </div>
-                        </div>
+                        <FileUpload 
+                            onFilesSelected={handleFilesSelected} 
+                            apiKey={apiKey} 
+                            onBack={handleResetAuth} 
+                        />
                     </div>
                 </div>
                 )}
@@ -436,9 +426,29 @@ const App: React.FC = () => {
                         </div>
 
                         {error && (
-                        <div className="w-full p-3 bg-red-900/30 border border-red-800 rounded-lg flex items-center gap-2 text-red-200 text-sm">
-                            <AlertCircle size={16} />
-                            {error}
+                        <div className="w-full p-4 bg-red-900/20 border border-red-800 rounded-lg flex flex-col gap-3 animate-fade-in">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle size={20} className="text-red-400 shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <h4 className="text-sm font-bold text-red-300">Generation Failed</h4>
+                                    <p className="text-xs text-red-200 mt-1 leading-relaxed">{error}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-3 pl-8">
+                                <button 
+                                    onClick={handleResetAuth}
+                                    className="px-4 py-2 bg-red-900/50 hover:bg-red-900 text-white text-xs rounded-lg transition-colors border border-red-700/50"
+                                >
+                                    Update API Key
+                                </button>
+                                <button 
+                                    onClick={handleManualModeEnter}
+                                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-colors border border-gray-700"
+                                >
+                                    Continue in Manual Mode
+                                </button>
+                            </div>
                         </div>
                         )}
                     </div>
