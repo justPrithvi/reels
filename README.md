@@ -42,7 +42,7 @@ Record your video. If you are recording in a noisy environment, pass your audio 
 
 ### 2. Transcribe (.SRT)
 Generative AI needs context. Convert your video/audio into an SRT subtitle file.
-*   *Recommended Tool:* **[Transcri.io](https://transcri.io/en/subtitle-generator/srt)** or standard video editing software.
+*   *Recommended Tool:* **[ZapSubs.com](https://zapsubs.com/)** or standard video editing software.
 
 ### 3. Compose (This App)
 1.  **Upload:** Drop your Video and SRT file into Reel Composer.
@@ -76,7 +76,7 @@ git clone https://github.com/prasannathapa/reel-composer.git
 npm install
 
 # Run the development server
-npm start
+npm run dev
 ```
 
 ### API Key Configuration
