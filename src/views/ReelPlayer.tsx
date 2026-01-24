@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { LayoutConfigStep, SRTItem } from '../../../types.ts';
+import { LayoutConfigStep, SRTItem } from '@/types.ts';
 import { Play, Pause, RefreshCw, Maximize, Minimize, Video, StopCircle, X, AlertTriangle, Monitor } from 'lucide-react';
 
 interface ReelPlayerProps {

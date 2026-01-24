@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema, Modality } from "@google/genai";
-import { GeneratedContent } from "../../types.ts";
+import { GeneratedContent } from "@/types.ts";
 import { constructPrompt } from "@/src/utils/promptTemplates.ts";
 import { fileToBase64, pcmToWav, extractAudioBlob } from "@/src/utils/audioHelpers.ts";
 
@@ -36,7 +36,7 @@ export const generateSRT = async (
   apiKey: string
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey });
-  
+
   // OPTIMIZATION: If input is a video, extract the audio track first.
   // Sending pure Audio (WAV) to Gemini significantly improves timestamp accuracy compared to processing video frames.
   let fileToProcess = mediaFile;
@@ -54,9 +54,9 @@ export const generateSRT = async (
   }
 
   const base64Data = await fileToBase64(fileToProcess);
-  
+
   // Use Flash for speed and multimodal capability
-  const model = 'gemini-2.5-flash'; 
+  const model = 'gemini-2.5-flash';
 
   // Define a strict schema for subtitles to prevent formatting hallucinations
   const subtitleSchema: Schema = {
@@ -84,11 +84,11 @@ export const generateSRT = async (
             }
           },
           {
-            text: `You are a professional captioning assistant. 
+            text: `You are a professional captioning assistant.
             Extract the transcript from this audio with EXTREME TIMING PRECISION.
-            
+
             CRITICAL RULES:
-            1. Timestamps must align perfectly with the audio waveform. 
+            1. Timestamps must align perfectly with the audio waveform.
             2. Break text into naturally spoken short chunks (max 3-5 words per chunk).
             3. Do NOT hallucinate. Only transcribe what is clearly spoken.
             4. If there is silence, do not create segments.
@@ -103,7 +103,7 @@ export const generateSRT = async (
     });
 
     const segments = JSON.parse(response.text || "[]");
-    
+
     // Convert JSON segments to SRT String
     let srtOutput = "";
     segments.forEach((seg: any, index: number) => {
@@ -111,7 +111,7 @@ export const generateSRT = async (
        const startTime = formatSRTTimestamp(seg.start);
        const endTime = formatSRTTimestamp(seg.end);
        const text = seg.text.trim();
-       
+
        srtOutput += `${id}\n${startTime} --> ${endTime}\n${text}\n\n`;
     });
 
@@ -130,7 +130,7 @@ export const generateTTS = async (
 ): Promise<Blob> => {
   const ai = new GoogleGenAI({ apiKey });
   // Correct model for TTS
-  const model = 'gemini-2.5-flash-preview-tts'; 
+  const model = 'gemini-2.5-flash-preview-tts';
 
   // Map to Gemini Voices
   // Female: Kore, Male: Charon
@@ -160,9 +160,9 @@ export const generateTTS = async (
     for (let i = 0; i < len; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    
+
     // Wrap raw PCM in WAV header so browsers can play/download it
-    return pcmToWav(bytes, 24000); 
+    return pcmToWav(bytes, 24000);
   } catch (error: any) {
     console.error("TTS Generation Error:", error);
     throw new Error(`Failed to generate speech: ${error.message || "Unknown error"}`);
@@ -200,11 +200,11 @@ export const generateReelContent = async (
 
     1. **NEVER use \`element.children\` or \`document.getElementsBy...\` for looping.**
        These return HTMLCollections which crash on \`.forEach\`.
-       
+
     2. **ALWAYS use \`gsap.utils.toArray(selector)\` for selection.**
        - ❌ WRONG: \`document.querySelectorAll('.box').forEach(...)\`
        - ✅ CORRECT: \`gsap.utils.toArray('.box').forEach(...)\`
-       
+
     3. **NEVER use unquoted values in GSAP objects.**
        - ❌ WRONG: \`{ width: 100% }\` (Crash)
        - ❌ WRONG: \`{ duration: 0.5s }\` (Crash)
@@ -222,15 +222,15 @@ export const generateReelContent = async (
     - **Structure**: Create multiple "Scenes" (#s1, #s2, #s3).
     - **Synchronization**: The JS **MUST** control the timeline via 'message' event.
       - \`window.addEventListener('message', (e) => { if(e.data.type==='timeupdate') tl.seek(e.data.time); ... });\`
-    
+
     ### CODING RULES
     - **NO SINGLE-LINE COMMENTS**: Use \`/* */\` block comments only.
     - **USE TEMPLATE LITERALS**: Backticks (\`) for all strings.
-    - try not to clip out or overlap elements, design elements and animsation utilising the split ratio's html part screen realesate 
+    - try not to clip out or overlap elements, design elements and animsation utilising the split ratio's html part screen realesate
     ### LAYOUT CONFIG REQUIREMENTS
     - 'layoutMode': 'split', 'full-video', 'full-html'.
     - 'splitRatio': e.g., 0.60 (HTML takes top 60%).
-    
+
     ${isAudioOnly ? `
     ### AUDIO ONLY MODE
     - FORCE 'layoutMode': 'full-html' FOR ALL SCENES.
@@ -243,11 +243,11 @@ export const generateReelContent = async (
   if (existingHtml && existingLayout) {
       prompt = `
       I have an existing HTML animation and Layout Config that I want to REFINE.
-      
+
       *** CRITICAL FIX INSTRUCTIONS ***
       1. FIX: "Uncaught SyntaxError: identifier starts immediately after numeric literal" (Quote your CSS units!)
       2. FIX: "TypeError: x.forEach is not a function" (Use gsap.utils.toArray)
-      
+
       *** CURRENT HTML ***
       ${existingHtml}
 
@@ -289,7 +289,7 @@ export const generateReelContent = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: modelName, 
+      model: modelName,
       contents: prompt,
       config: {
         systemInstruction: systemInstruction,
@@ -326,11 +326,11 @@ export const generateReelContent = async (
                         if(element) element.innerHTML = '';
                     }
                 };
-                
+
                 console.log("Reel Composer: Standard Library Loaded");
             })();
         </script>`;
-        
+
         // Inject immediately after <head> for earliest execution
         result.html = result.html.replace('<head>', '<head>' + reelHelperScript);
     }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ReelPlayer } from './ReelPlayer.tsx';
 import { EditorPanel } from './EditorPanel.tsx';
-import { GeneratedContent, SRTItem } from '../../../types.ts';
+import { GeneratedContent, SRTItem } from '@/types.ts';
 
 interface EditorViewProps {
   videoUrl: string;

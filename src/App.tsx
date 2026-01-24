@@ -4,7 +4,7 @@ import {WelcomeScreen} from '@/src/components/WelcomeScreen.tsx';
 import {MobileBlocker} from '@/src/components/MobileBlocker.tsx';
 import {AppHeader} from '@/src/components/AppHeader.tsx';
 import {GeneratingScreen} from '@/src/components/GeneratingScreen.tsx';
-import {EditorView} from '@/src/views/basic/EditorView.tsx';
+import {EditorView} from '@/src/views/EditorView.tsx';
 import {Snackbar} from '@/src/components/Snackbar.tsx';
 import {ReplaceSceneDialog} from '@/src/components/ReplaceSceneDialog.tsx';
 import {parseSRT} from '@/src/utils/srtParser.ts';
