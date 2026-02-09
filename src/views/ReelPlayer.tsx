@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { LayoutConfigStep, SRTItem } from '@/types.ts';
 import { Play, Pause, RefreshCw, Maximize, Minimize, Video, StopCircle, X, AlertTriangle, Monitor } from 'lucide-react';
+import { EndScreen } from '@/src/components/EndScreen.tsx';
 
 interface ReelPlayerProps {
   videoUrl: string;
@@ -16,8 +17,23 @@ interface ReelPlayerProps {
   subtitleFontFamily?: string;
   subtitleColor?: string;
   subtitleBgColor?: string;
+  subtitleBgOpacity?: number;
   subtitlePaddingX?: number;
   subtitlePaddingY?: number;
+  subtitleMaxWidth?: number;
+  // End Screen Props
+  showEndScreen?: boolean;
+  endScreenProfileImage?: string;
+  endScreenName?: string;
+  endScreenTagline?: string;
+  endScreenSocialHandles?: {
+    instagram?: string;
+    youtube?: string;
+    twitter?: string;
+  };
+  showEndScreenSocialIcons?: boolean;
+  endScreenStartTime?: number; // When to start showing end screen (in seconds)
+  endScreenEndTime?: number; // When to stop showing end screen (in seconds)
 }
 
 export const ReelPlayer: React.FC<ReelPlayerProps> = ({
@@ -34,8 +50,19 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   subtitleFontFamily = 'Inter',
   subtitleColor = '#FFFFFF',
   subtitleBgColor = 'rgba(0,0,0,0.8)',
+  subtitleBgOpacity = 80,
   subtitlePaddingX = 16,
-  subtitlePaddingY = 8
+  subtitlePaddingY = 8,
+  subtitleMaxWidth = 90,
+  // End Screen Props
+  showEndScreen = true,
+  endScreenProfileImage,
+  endScreenName = "Your Name",
+  endScreenTagline = "Follow for more",
+  endScreenSocialHandles,
+  showEndScreenSocialIcons = true,
+  endScreenStartTime,
+  endScreenEndTime
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -46,9 +73,34 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [showExportInfo, setShowExportInfo] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [videoEnded, setVideoEnded] = useState(false);
 
   // Key to force re-render iframe on restart
   const [iframeKey, setIframeKey] = useState(0);
+
+  // Check if we should show end screen based on current time
+  const shouldShowEndScreen = useMemo(() => {
+    if (!showEndScreen) {
+      console.log('🚫 End screen disabled');
+      return false;
+    }
+    
+    // Only show during specified time range (no fallback after video ends)
+    if (endScreenStartTime !== undefined) {
+      const endTime = endScreenEndTime ?? duration;
+      const shouldShow = currentTime >= endScreenStartTime && currentTime <= endTime;
+      
+      if (shouldShow) {
+        console.log(`✅ Showing end screen: time=${currentTime.toFixed(2)}s, start=${endScreenStartTime}s, end=${endTime.toFixed(2)}s`);
+      }
+      
+      return shouldShow;
+    }
+    
+    // If no time range set, don't show end screen at all
+    console.log('⚠️ End screen time not set');
+    return false;
+  }, [showEndScreen, currentTime, endScreenStartTime, endScreenEndTime, duration]);
 
   // --- Computed State based on Time ---
   const currentLayout = useMemo(() => {
@@ -80,7 +132,9 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
 
   // --- Styles calculation ---
   const getLayoutStyles = () => {
-    const { layoutMode, splitRatio = 0.5 } = currentLayout;
+    // Handle both 'mode' and 'layoutMode' for backwards compatibility
+    const layoutMode = (currentLayout as any).layoutMode || (currentLayout as any).mode || 'split';
+    const { splitRatio = 0.5 } = currentLayout;
 
     let htmlHeight = '50%';
     let videoHeight = '50%';
@@ -110,7 +164,9 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   };
 
   const getCaptionStyle = () => {
-    const { layoutMode, splitRatio = 0.5, captionPosition } = currentLayout;
+    // Handle both 'mode' and 'layoutMode' for backwards compatibility
+    const layoutMode = (currentLayout as any).layoutMode || (currentLayout as any).mode || 'split';
+    const { splitRatio = 0.5, captionPosition } = currentLayout;
 
     const baseStyle: React.CSSProperties = {
       position: 'absolute',
@@ -138,14 +194,44 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
     switch (captionPosition) {
       case 'top': return { ...baseStyle, top: '15%' };
       case 'center': return { ...baseStyle, top: '50%' };
-      case 'bottom':
+      case 'bottom': return { ...baseStyle, top: '80%' };
+      case 'full': return { ...baseStyle, top: '50%', width: '95%', fontSize: '1.2em' };
       default: return { ...baseStyle, top: '80%' };
     }
   };
 
   const layoutStyles = getLayoutStyles();
   const captionStyle = getCaptionStyle();
-  const isFullHtml = currentLayout.layoutMode === 'full-html';
+  // Handle both 'mode' and 'layoutMode' for backwards compatibility
+  const layoutMode = (currentLayout as any).layoutMode || (currentLayout as any).mode || 'split';
+  const isFullHtml = layoutMode === 'full-html';
+
+  // Helper to apply opacity to background color
+  const getBackgroundColorWithOpacity = () => {
+    const opacity = subtitleBgOpacity / 100;
+    
+    // If already rgba, replace the alpha value
+    if (subtitleBgColor.startsWith('rgba')) {
+      return subtitleBgColor.replace(/[\d.]+\)$/g, `${opacity})`);
+    }
+    
+    // If rgb, convert to rgba
+    if (subtitleBgColor.startsWith('rgb')) {
+      return subtitleBgColor.replace('rgb', 'rgba').replace(')', `, ${opacity})`);
+    }
+    
+    // If hex color, convert to rgba
+    if (subtitleBgColor.startsWith('#')) {
+      const hex = subtitleBgColor.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+    
+    // Fallback
+    return subtitleBgColor;
+  };
 
   // --- Word-by-Word Animation Logic (With Chunking) ---
   const renderAnimatedCaption = () => {
@@ -177,7 +263,8 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
         className={`flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 rounded-2xl transition-all duration-300 ${isFullHtml ? 'backdrop-blur-md border border-white/10 shadow-2xl' : ''}`}
         style={{
           minHeight: '60px',
-          backgroundColor: subtitleBgColor,
+          maxWidth: `${subtitleMaxWidth}%`,
+          backgroundColor: getBackgroundColorWithOpacity(),
           fontFamily: subtitleFontFamily,
           paddingLeft: `${subtitlePaddingX}px`,
           paddingRight: `${subtitlePaddingX}px`,
@@ -318,29 +405,51 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   // --- Event Listeners for State ---
   useEffect(() => {
     const video = videoRef.current;
-    const audio = audioRef.current;
     if (!video) return;
 
     const handlePlay = () => {
       setIsPlaying(true);
       postMessageToIframe({ type: 'play' });
+      const audio = audioRef.current;
       if (audio && audio.src) audio.play().catch(() => {});
     };
 
     const handlePause = () => {
       setIsPlaying(false);
       postMessageToIframe({ type: 'pause' });
+      const audio = audioRef.current;
       if (audio) audio.pause();
     };
 
     const handleLoadedMetadata = () => {
+      console.log('📹 Video metadata loaded, duration:', video.duration);
+      if (video.duration && isFinite(video.duration) && video.duration > 0) {
       setDuration(video.duration);
+      } else if (!isFinite(video.duration)) {
+        console.warn('⚠️ Video duration is Infinity, will use SRT duration estimate');
+      }
       postMessageToIframe({ type: 'timeupdate', time: video.currentTime });
+    };
+
+    const handleCanPlay = () => {
+      console.log('📹 Video can play, duration:', video.duration);
+      if (video.duration && isFinite(video.duration) && video.duration > 0 && duration === 0) {
+        setDuration(video.duration);
+      }
+    };
+
+    const handleDurationChange = () => {
+      console.log('📹 Video duration changed:', video.duration);
+      if (video.duration && isFinite(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+      }
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
+      setVideoEnded(true);
       postMessageToIframe({ type: 'pause' });
+      const audio = audioRef.current;
       if (audio) {
         audio.pause();
         audio.currentTime = 0;
@@ -355,12 +464,15 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
         if (video.paused) {
             setCurrentTime(video.currentTime);
             postMessageToIframe({ type: 'timeupdate', time: video.currentTime });
+            const audio = audioRef.current;
             if (audio) audio.currentTime = video.currentTime;
         }
     };
 
     const handleSeeked = () => {
-      handleTimeUpdate();
+      const audio = audioRef.current;
+      setCurrentTime(video.currentTime);
+      postMessageToIframe({ type: 'timeupdate', time: video.currentTime });
       if (audio) audio.currentTime = video.currentTime;
     }
 
@@ -368,23 +480,78 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('durationchange', handleDurationChange);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('seeked', handleSeeked);
+
+    // Check immediately if duration is already available
+    if (video.duration && isFinite(video.duration)) {
+      console.log('📹 Duration already available:', video.duration);
+      setDuration(video.duration);
+    }
 
     return () => {
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('durationchange', handleDurationChange);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('seeked', handleSeeked);
     };
   }, []);
 
+  // Fallback: If video duration is Infinity or NaN, estimate from SRT data
+  useEffect(() => {
+    if (srtData && srtData.length > 0 && (!duration || !isFinite(duration) || duration === 0)) {
+      const maxEndTime = Math.max(...srtData.map(item => item.endTime));
+      if (maxEndTime > 0 && isFinite(maxEndTime)) {
+        console.log('📹 Using SRT duration estimate:', maxEndTime);
+        setDuration(maxEndTime);
+      }
+    }
+  }, [srtData, duration]);
+
+  // Aggressive duration polling - check every 100ms until we get it
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoUrl) {
+      return;
+    }
+    
+    let attempts = 0;
+    const maxAttempts = 20; // 2 seconds max (reduced since we have SRT fallback)
+    
+    const interval = setInterval(() => {
+      attempts++;
+      const currentDuration = video.duration;
+      
+      if (currentDuration && isFinite(currentDuration) && currentDuration > 0) {
+        console.log('✅ GOT VALID DURATION from video:', currentDuration);
+        setDuration(currentDuration);
+        clearInterval(interval);
+      } else if (!isFinite(currentDuration)) {
+        console.warn('⚠️ Video duration is Infinity/NaN, stopping polling. Will use SRT estimate.');
+        clearInterval(interval);
+      } else if (attempts >= maxAttempts) {
+        console.warn('⚠️ Could not get video duration after', maxAttempts, 'attempts. Will use SRT estimate.');
+        clearInterval(interval);
+      }
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, [videoUrl]);
+
   const togglePlay = () => {
     if (videoRef.current) {
-      if (isPlaying) videoRef.current.pause();
-      else videoRef.current.play();
+      if (videoRef.current.paused) {
+        setVideoEnded(false);
+        videoRef.current.play().catch(e => console.warn("Play failed:", e));
+      } else {
+        videoRef.current.pause();
+      }
     }
   };
 
@@ -392,6 +559,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
       videoRef.current.play();
+      setVideoEnded(false);
 
       // Force Iframe Reload
       setIframeKey(prev => prev + 1);
@@ -481,19 +649,26 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   return (
     <div className={`flex flex-col items-center justify-center ${fullScreenMode ? 'fixed inset-0 z-50 bg-black' : 'h-full'}`}>
 
+      {/* Mobile Phone Preview Container - 405px × 720px (9:16 aspect ratio) */}
+      {/* Matches real phone dimensions (iPhone/Android) for accurate preview */}
       <div
         className="relative bg-black overflow-hidden shadow-2xl border border-gray-800"
         style={{
-          width: fullScreenMode ? '100vh' : '360px',
-          height: fullScreenMode ? '100vh' : '640px',
+          width: fullScreenMode ? '100vh' : '405px',
+          height: fullScreenMode ? '100vh' : '720px',
           aspectRatio: '9/16',
           maxWidth: fullScreenMode ? '100vw' : '100%',
           cursor: isRecording ? 'none' : 'default'
         }}
       >
+        {/* HTML Animation Container - Hidden when end screen is active */}
         <div
-          className="absolute top-0 left-0 w-full overflow-hidden bg-gray-900"
-          style={layoutStyles.htmlContainer}
+          className="absolute top-0 left-0 w-full overflow-hidden bg-gray-900 transition-opacity duration-500"
+          style={{
+            ...layoutStyles.htmlContainer,
+            opacity: shouldShowEndScreen ? 0 : 1,
+            pointerEvents: shouldShowEndScreen ? 'none' : 'auto'
+          }}
         >
           <iframe
             key={iframeKey} // Force Re-render on key change
@@ -506,9 +681,13 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
           />
         </div>
 
+        {/* Video Container - Hidden when end screen is active */}
         <div
-          className="absolute bottom-0 left-0 w-full overflow-hidden bg-black"
-          style={layoutStyles.videoContainer}
+          className="absolute bottom-0 left-0 w-full overflow-hidden bg-black transition-opacity duration-500"
+          style={{
+            ...layoutStyles.videoContainer,
+            opacity: shouldShowEndScreen ? 0 : 1
+          }}
         >
           {/* Main Video */}
           <video
@@ -516,8 +695,22 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
             ref={videoRef}
             src={videoUrl}
             className="w-full h-full object-cover"
+            style={{ 
+              transform: 'scaleX(-1)',
+              WebkitTransform: 'scaleX(-1)'
+            }}
             playsInline
             muted={false}
+            preload="metadata"
+            onLoadedMetadata={(e) => {
+              const vid = e.currentTarget;
+              console.log('📹 onLoadedMetadata inline handler, duration:', vid.duration);
+              if (vid.duration && isFinite(vid.duration) && vid.duration > 0) {
+                setDuration(vid.duration);
+              } else if (!isFinite(vid.duration)) {
+                console.warn('⚠️ Duration is Infinity, will estimate from SRT data');
+              }
+            }}
           />
           {/* Background Music - Hidden */}
           <audio
@@ -526,14 +719,26 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
           />
         </div>
 
-        {currentCaption && (
+        {/* Only show captions when end screen is NOT active */}
+        {currentCaption && !shouldShowEndScreen && (
           <div style={captionStyle}>
             <div className="relative group max-w-[95%]">
-              {!isFullHtml && (
-                 <div className="absolute inset-0 bg-black/60 backdrop-blur-md rounded-xl -z-10 shadow-lg border border-white/5" />
-              )}
               {renderAnimatedCaption()}
             </div>
+          </div>
+        )}
+
+        {/* End Screen - Full overlay, hides everything else */}
+        {/* Audio continues playing in background */}
+        {shouldShowEndScreen && (
+          <div className="absolute inset-0 z-50 animate-fade-in">
+            <EndScreen
+              profileImage={endScreenProfileImage}
+              name={endScreenName}
+              tagline={endScreenTagline}
+              socialHandles={endScreenSocialHandles}
+              showSocialIcons={showEndScreenSocialIcons}
+            />
           </div>
         )}
 
@@ -542,8 +747,8 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
             <button onClick={togglePlay} className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur rounded-full text-white">
               {isPlaying ? <Pause size={20} /> : <Play size={20} />}
             </button>
-            <span className="text-xs font-mono text-white/80 bg-black/40 px-2 py-1 rounded">
-              {currentTime.toFixed(1)}s / {duration.toFixed(1)}s
+            <span className="text-xs font-mono text-white/80 bg-black/40 px-2 py-1 rounded" title={`Duration state: ${duration} (finite: ${isFinite(duration)}, >0: ${duration > 0})`}>
+              {currentTime.toFixed(1)}s / {duration > 0 && isFinite(duration) ? duration.toFixed(1) : '...'}{duration > 0 && !isFinite(duration) ? '(∞)' : ''}s
             </span>
             <button onClick={restart} className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur rounded-full text-white" title="Restart & Reload HTML">
               <RefreshCw size={20} />

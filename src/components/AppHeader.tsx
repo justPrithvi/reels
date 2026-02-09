@@ -1,5 +1,6 @@
-import React from 'react';
-import { Key } from 'lucide-react';
+import React, { useState } from 'react';
+import { Key, Package } from 'lucide-react';
+import { ComponentGallery } from '@/src/views/ComponentGallery';
 
 interface AppHeaderProps {
   onResetAuth: () => void;
@@ -7,12 +8,26 @@ interface AppHeaderProps {
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ onResetAuth, onNewProject }) => {
+  const [showGallery, setShowGallery] = useState(false);
+  
   return (
+    <>
     <header className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-black/50 backdrop-blur-sm z-10 shrink-0">
       <div className="font-bold text-xl bg-clip-text text-transparent bg-linear-to-r from-purple-400 to-pink-500">
         Reel Composer
       </div>
       <div className="flex items-center gap-4 text-sm text-gray-400">
+          <button
+            onClick={() => setShowGallery(true)}
+            className="flex items-center gap-2 hover:text-white transition-colors"
+            title="View Components"
+          >
+            <Package size={16} />
+            <span className="hidden lg:inline">Components</span>
+          </button>
+          
+          <div className="w-px h-4 bg-gray-700"></div>
+          
         <button
           onClick={onResetAuth}
           className="flex items-center gap-2 hover:text-white transition-colors"
@@ -34,5 +49,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onResetAuth, onNewProject 
         <span className="text-xs uppercase tracking-widest text-purple-400">v1.3</span>
       </div>
     </header>
+      
+      {showGallery && <ComponentGallery onClose={() => setShowGallery(false)} />}
+    </>
   );
 };

@@ -5,28 +5,26 @@ import { validateGeminiConnection } from '@/src/services/geminiService.ts';
 import { APP_CONFIG } from '@/config.ts';
 
 interface WelcomeScreenProps {
-  onComplete: (apiKey: string | null, model?: string, saveManualMode?: boolean) => void;
+  onComplete: (apiKey: string, spaceName: string) => void;
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
   const [apiKey, setApiKey] = useState('');
+  const [spaceName, setSpaceName] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Default model enforced internally
   const selectedModel = APP_CONFIG.DEFAULT_MODEL;
 
-  // Prepopulate key if exists
-  useEffect(() => {
-    const storedKey = localStorage.getItem('gemini_api_key');
-    if (storedKey && storedKey !== APP_CONFIG.DEFAULT_API_KEY) {
-        setApiKey(storedKey);
-    }
-  }, []);
-
-  const handleValidation = async () => {
+  const handleEnterSpace = async () => {
     if (!apiKey.trim()) {
       setError("Please enter a valid API Key.");
+      return;
+    }
+
+    if (!spaceName.trim()) {
+      setError("Please enter a space name.");
       return;
     }
     
@@ -38,15 +36,10 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
     setIsValidating(false);
     
     if (isValid) {
-      onComplete(apiKey, selectedModel);
+      onComplete(apiKey.trim(), spaceName.trim());
     } else {
-      setError("Connection failed. Please check your key.");
+      setError("Connection failed. Please check your API key.");
     }
-  };
-
-  const handleManualSkip = () => {
-    // Pass null to indicate manual mode (no API key)
-    onComplete(null);
   };
 
   return (
@@ -67,16 +60,35 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
             Reel Composer
           </h1>
           <p className="text-gray-400 mt-6 text-xl font-light max-w-sm mx-auto leading-relaxed">
-            AI-powered director for high-retention video content.
+            Enter your workspace to start creating
           </p>
-          <a href="https://blog.prasannathapa.in/reel-composer/" target="_blank" rel="noreferrer" className="inline-block mt-4 text-xs font-bold text-purple-400 hover:text-white uppercase tracking-widest border-b border-purple-500/30 hover:border-white transition-all pb-0.5">
-            Read The Philosophy
-          </a>
+          <p className="text-gray-500 mt-4 text-sm">
+            Built by <span className="text-purple-400 font-semibold">Prithvi</span>, Software Engineer
+          </p>
         </div>
 
-        {/* API Key Form */}
+        {/* Entry Form */}
         <div className="w-full space-y-6 animate-fade-in">
             
+            {/* Space Name */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-center px-1">
+                    <label className="text-sm font-semibold text-gray-300">Workspace Name</label>
+                </div>
+                <div className="relative group">
+                    <input
+                    type="text"
+                    value={spaceName}
+                    onChange={(e) => setSpaceName(e.target.value)}
+                    placeholder="e.g., My Projects, Work, Personal..."
+                    className="w-full bg-black/50 border border-gray-700 rounded-2xl px-5 py-4 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all text-sm placeholder-gray-600 shadow-inner"
+                    onKeyPress={(e) => e.key === 'Enter' && handleEnterSpace()}
+                    />
+                    <div className="absolute inset-0 rounded-2xl bg-purple-500/5 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity"></div>
+                </div>
+            </div>
+
+            {/* API Key */}
             <div className="space-y-3">
                 <div className="flex justify-between items-center px-1">
                     <label className="text-sm font-semibold text-gray-300">Google Gemini API Key</label>
@@ -89,8 +101,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Paste your API Key here (AIzaSy...)"
+                    placeholder="Paste your API Key (AIzaSy...)"
                     className="w-full bg-black/50 border border-gray-700 rounded-2xl px-5 py-4 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all font-mono text-sm placeholder-gray-600 shadow-inner"
+                    onKeyPress={(e) => e.key === 'Enter' && handleEnterSpace()}
                     />
                     <div className="absolute inset-0 rounded-2xl bg-purple-500/5 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity"></div>
                 </div>
@@ -98,18 +111,18 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                 <div className="flex items-start gap-2 px-1">
                     <ShieldCheck className="text-green-500/80 shrink-0 mt-0.5" size={14} />
                     <p className="text-[11px] text-gray-500 leading-tight">
-                        Your key is stored locally in your browser and sent directly to Google.
+                        Session-only. Your key is never stored permanently.
                     </p>
                 </div>
             </div>
 
             <button
-            onClick={handleValidation}
+            onClick={handleEnterSpace}
             disabled={isValidating}
             className={`w-full py-5 rounded-2xl font-bold text-lg transition-all shadow-xl hover:shadow-2xl hover:scale-[1.02] flex items-center justify-center gap-3 ${
                 isValidating 
                 ? 'bg-gray-800 cursor-not-allowed text-gray-500' 
-                : 'bg-white text-black hover:bg-gray-100'
+                : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white'
             }`}
             >
             {isValidating ? (
@@ -118,7 +131,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                     Verifying...
                 </span>
             ) : (
-                <>Enter Studio <ArrowRight size={20} /></>
+                <>Enter Workspace <ArrowRight size={20} /></>
             )}
             </button>
             
@@ -127,15 +140,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                 <AlertTriangle size={16} className="shrink-0" /> {error}
                 </div>
             )}
-
-            <div className="pt-6 border-t border-gray-800/50 text-center">
-                <button 
-                    onClick={handleManualSkip}
-                    className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
-                >
-                    Or enter manual mode (No AI features)
-                </button>
-            </div>
         </div>
       </div>
     </div>

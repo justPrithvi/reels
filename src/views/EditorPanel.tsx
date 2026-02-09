@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {GeneratedContent, LayoutConfigStep} from '@/types.ts';
+import {GeneratedContent, LayoutConfigStep, SRTItem} from '@/types.ts';
 import {
   Bot,
   BrainCircuit,
@@ -30,10 +30,12 @@ import {
 } from 'lucide-react';
 import {extractWavFromVideo} from '@/src/utils/audioHelpers.ts';
 import {constructPrompt} from '@/src/utils/promptTemplates.ts';
-import {validateGeminiConnection} from '@/src/services/geminiService.ts';
+import {validateGeminiConnection, regenerateSegment} from '@/src/services/geminiService.ts';
 import {APP_CONFIG} from '@/config.ts';
+import {formatHTML, formatJSON} from '@/src/utils/htmlFormatter';
 
 interface EditorPanelProps {
+  projectId?: number;
   content: GeneratedContent;
   onUpdate: (newContent: GeneratedContent) => void;
   isGenerating: boolean;
@@ -42,6 +44,7 @@ interface EditorPanelProps {
   topicContext: string;
   onTopicContextChange: (text: string) => void;
   srtText: string;
+  srtData: SRTItem[];
   bgMusicName?: string;
   onBgMusicChange: (file: File | null) => void;
   bgMusicVolume: number;
@@ -59,13 +62,39 @@ interface EditorPanelProps {
   onSubtitleColorChange: (color: string) => void;
   subtitleBgColor: string;
   onSubtitleBgColorChange: (color: string) => void;
+  subtitleBgOpacity: number;
+  onSubtitleBgOpacityChange: (opacity: number) => void;
   subtitlePaddingX: number;
   onSubtitlePaddingXChange: (padding: number) => void;
   subtitlePaddingY: number;
   onSubtitlePaddingYChange: (padding: number) => void;
+  subtitleMaxWidth: number;
+  onSubtitleMaxWidthChange: (width: number) => void;
+  // End Screen Props
+  showEndScreen: boolean;
+  onShowEndScreenChange: (show: boolean) => void;
+  endScreenProfileImage: string;
+  onEndScreenProfileImageChange: (url: string) => void;
+  endScreenName: string;
+  onEndScreenNameChange: (name: string) => void;
+  endScreenTagline: string;
+  onEndScreenTaglineChange: (tagline: string) => void;
+  endScreenInstagram: string;
+  onEndScreenInstagramChange: (handle: string) => void;
+  endScreenYoutube: string;
+  onEndScreenYoutubeChange: (handle: string) => void;
+  endScreenTwitter: string;
+  onEndScreenTwitterChange: (handle: string) => void;
+  showEndScreenSocialIcons: boolean;
+  onShowEndScreenSocialIconsChange: (show: boolean) => void;
+  endScreenStartTime?: number;
+  onEndScreenStartTimeChange: (time: number | undefined) => void;
+  endScreenEndTime?: number;
+  onEndScreenEndTimeChange: (time: number | undefined) => void;
 }
 
 export const EditorPanel: React.FC<EditorPanelProps> = ({
+  projectId,
   content,
   onUpdate,
   isGenerating,
@@ -74,6 +103,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   topicContext,
   onTopicContextChange,
   srtText,
+  srtData,
   bgMusicName,
   onBgMusicChange,
   bgMusicVolume,
@@ -91,17 +121,68 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   onSubtitleColorChange,
   subtitleBgColor,
   onSubtitleBgColorChange,
+  subtitleBgOpacity,
+  onSubtitleBgOpacityChange,
   subtitlePaddingX,
   onSubtitlePaddingXChange,
   subtitlePaddingY,
-  onSubtitlePaddingYChange
+  onSubtitlePaddingYChange,
+  subtitleMaxWidth,
+  onSubtitleMaxWidthChange,
+  showEndScreen,
+  onShowEndScreenChange,
+  endScreenProfileImage,
+  onEndScreenProfileImageChange,
+  endScreenName,
+  onEndScreenNameChange,
+  endScreenTagline,
+  onEndScreenTaglineChange,
+  endScreenInstagram,
+  onEndScreenInstagramChange,
+  endScreenYoutube,
+  onEndScreenYoutubeChange,
+  endScreenTwitter,
+  onEndScreenTwitterChange,
+  showEndScreenSocialIcons,
+  onShowEndScreenSocialIconsChange,
+  endScreenStartTime,
+  onEndScreenStartTimeChange,
+  endScreenEndTime,
+  onEndScreenEndTimeChange
 }) => {
   const [activeTab, setActiveTab] = useState<'html' | 'config' | 'ai_audio'>('config');
-  const [localConfig, setLocalConfig] = useState(JSON.stringify(content.layoutConfig, null, 2));
-  const [localHtml, setLocalHtml] = useState(content.html);
+  const [localConfig, setLocalConfig] = useState(formatJSON(JSON.stringify(content.layoutConfig)));
+  const [localHtml, setLocalHtml] = useState(formatHTML(content.html));
   const [isExtracting, setIsExtracting] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSubtitleControlsExpanded, setIsSubtitleControlsExpanded] = useState(false);
+  const [isEndScreenControlsExpanded, setIsEndScreenControlsExpanded] = useState(false);
+
+  // Detect if last subtitle contains closing phrases
+  const detectClosingSegment = () => {
+    if (!srtData || srtData.length === 0) return null;
+    
+    const closingPhrases = [
+      'thank you', 'thanks for watching', 'subscribe', 'follow', 
+      'see you', 'catch you', 'until next', 'stay tuned',
+      'like and subscribe', 'smash that', 'hit that bell',
+      'comment below', 'let me know', 'peace out', 'signing off',
+      'that\'s it', 'that\'s all', 'conclusion', 'final thoughts'
+    ];
+    
+    // Check last 2-3 subtitle items
+    const lastItems = srtData.slice(-3);
+    for (const item of lastItems) {
+      const text = item.text.toLowerCase();
+      if (closingPhrases.some(phrase => text.includes(phrase))) {
+        return item.startTime;
+      }
+    }
+    
+    return null;
+  };
+
+  const suggestedEndScreenTime = detectClosingSegment();
 
   // Key Editing State
   const [isEditingKey, setIsEditingKey] = useState(false);
@@ -197,8 +278,50 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
     onSubtitleFontFamilyChange('Inter');
     onSubtitleColorChange('#FFFFFF');
     onSubtitleBgColorChange('rgba(0,0,0,0.8)');
+    onSubtitleBgOpacityChange(80);
     onSubtitlePaddingXChange(16);
     onSubtitlePaddingYChange(8);
+    onSubtitleMaxWidthChange(90);
+  };
+
+  const handleRegenerateSegment = async (segmentIndex: number, customPrompt: string) => {
+    const segment = srtData[segmentIndex];
+    if (!segment) throw new Error('Segment not found');
+
+    // Call Gemini to regenerate this segment
+    const { html: segmentHtml, layoutStep } = await regenerateSegment(
+      segment.text,
+      segment.startTime,
+      segment.endTime,
+      customPrompt,
+      apiKey,
+      modelName
+    );
+
+    // Merge into existing content
+    // For now, we'll append the new HTML and replace the layout step
+    const updatedLayoutConfig = [...content.layoutConfig];
+    
+    // Find and replace the layout step that overlaps with this segment
+    const layoutIndex = updatedLayoutConfig.findIndex(
+      step => step.startTime <= segment.startTime && step.endTime >= segment.endTime
+    );
+    
+    if (layoutIndex >= 0) {
+      updatedLayoutConfig[layoutIndex] = layoutStep;
+    } else {
+      updatedLayoutConfig.push(layoutStep);
+    }
+
+    // For HTML, we'll need to parse and inject the scene
+    // For simplicity, let's append it as a new scene
+    const updatedHtml = content.html + `\n<!-- Regenerated Segment ${segmentIndex + 1} -->\n` + segmentHtml;
+
+    onUpdate({
+      ...content,
+      html: formatHTML(updatedHtml),
+      layoutConfig: updatedLayoutConfig
+    });
   };
 
   return (
@@ -220,11 +343,11 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
           onClick={() => setActiveTab('ai_audio')}
           className={`flex-1 p-3 flex items-center justify-center gap-2 text-sm font-medium ${activeTab === 'ai_audio' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
         >
-          <Settings size={16} /> AI & Audio
+          <Settings size={16} /> Settings
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 relative">
+      <div className="flex-1 overflow-auto relative">
         {activeTab === 'config' && (
           <textarea
             className="w-full h-full bg-gray-950 text-green-400 font-mono text-sm p-4 rounded border border-gray-800 focus:border-purple-500 outline-none resize-none"
@@ -240,7 +363,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
           />
         )}
         {activeTab === 'ai_audio' && (
-          <div className="space-y-6 text-sm">
+          <div className="space-y-6 text-sm p-4">
 
             {/* Visual Context / Refinement Instructions */}
             <div className={`p-4 rounded-lg space-y-3 ${hasContent ? 'bg-purple-900/10 border border-purple-500/30' : 'bg-gray-800/50'}`}>
@@ -557,6 +680,22 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                     </div>
                   </div>
 
+                  {/* Background Opacity */}
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-400">Background Opacity</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0" max="100" step="5"
+                        value={subtitleBgOpacity}
+                        onChange={(e) => onSubtitleBgOpacityChange(parseInt(e.target.value))}
+                        className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <span className="text-xs w-10 text-right text-white">{subtitleBgOpacity}%</span>
+                    </div>
+                    <p className="text-xs text-gray-500 italic">0% = transparent, 100% = solid</p>
+                  </div>
+
                   {/* Horizontal Padding (Left & Right) */}
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400">Padding Left/Right</label>
@@ -585,6 +724,277 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                       />
                       <span className="text-xs w-10 text-right text-white">{subtitlePaddingY}px</span>
                     </div>
+                  </div>
+
+                  {/* Max Width */}
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-400">Max Width</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="30" max="100" step="5"
+                        value={subtitleMaxWidth}
+                        onChange={(e) => onSubtitleMaxWidthChange(parseInt(e.target.value))}
+                        className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <span className="text-xs w-10 text-right text-white">{subtitleMaxWidth}%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* End Screen Controls */}
+            <div className="bg-gray-800/50 p-4 rounded-lg space-y-3">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => setIsEndScreenControlsExpanded(!isEndScreenControlsExpanded)}
+              >
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  <Sparkles size={16} /> End Screen
+                </h3>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 mr-2">
+                    <input
+                      type="checkbox"
+                      checked={showEndScreen}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onShowEndScreenChange(e.target.checked);
+                      }}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-gray-400">Enabled</span>
+                  </label>
+                  {isEndScreenControlsExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </div>
+              </div>
+
+              {isEndScreenControlsExpanded && (
+                <div className="space-y-3 animate-fade-in">
+                  {/* Profile Image */}
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-400">Profile Image</label>
+                    {endScreenProfileImage ? (
+                      <div className="flex items-center gap-2">
+                        <img 
+                          src={endScreenProfileImage} 
+                          alt="Profile Preview" 
+                          className="w-12 h-12 rounded-full object-cover border-2 border-gray-600"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        <div className="flex-1 bg-gray-700 rounded px-2 py-1.5 text-xs text-white truncate">
+                          {endScreenProfileImage.substring(0, 40)}...
+                        </div>
+                        <button
+                          onClick={() => onEndScreenProfileImageChange('')}
+                          className="p-1 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded transition-colors"
+                          title="Remove Image"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                onEndScreenProfileImageChange(reader.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="block w-full text-xs text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+                        />
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-px bg-gray-700"></div>
+                          <span className="text-xs text-gray-500">or</span>
+                          <div className="flex-1 h-px bg-gray-700"></div>
+                        </div>
+                        <input
+                          type="text"
+                          value={endScreenProfileImage}
+                          onChange={(e) => onEndScreenProfileImageChange(e.target.value)}
+                          className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:border-purple-500 outline-none"
+                          placeholder="Or paste image URL"
+                        />
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 italic">Leave empty to show your name initial</p>
+                  </div>
+
+                  {/* Name */}
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-400">Name</label>
+                    <input
+                      type="text"
+                      value={endScreenName}
+                      onChange={(e) => onEndScreenNameChange(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:border-purple-500 outline-none"
+                      placeholder="Your Name"
+                    />
+                  </div>
+
+                  {/* Tagline */}
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-400">Tagline</label>
+                    <input
+                      type="text"
+                      value={endScreenTagline}
+                      onChange={(e) => onEndScreenTaglineChange(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:border-purple-500 outline-none"
+                      placeholder="Follow for more"
+                    />
+                  </div>
+
+                  {/* Social Handles */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-gray-400">Social Media</label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={showEndScreenSocialIcons}
+                          onChange={(e) => onShowEndScreenSocialIconsChange(e.target.checked)}
+                          className="w-3 h-3 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-gray-500">Show Icons</span>
+                      </label>
+                    </div>
+
+                    <input
+                      type="text"
+                      value={endScreenInstagram}
+                      onChange={(e) => onEndScreenInstagramChange(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:border-purple-500 outline-none"
+                      placeholder="Instagram handle"
+                    />
+                    <input
+                      type="text"
+                      value={endScreenYoutube}
+                      onChange={(e) => onEndScreenYoutubeChange(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:border-purple-500 outline-none"
+                      placeholder="YouTube handle"
+                    />
+                    <input
+                      type="text"
+                      value={endScreenTwitter}
+                      onChange={(e) => onEndScreenTwitterChange(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:border-purple-500 outline-none"
+                      placeholder="Twitter handle"
+                    />
+                  </div>
+
+                  {/* Time Range */}
+                  <div className="space-y-2 pt-2 border-t border-gray-700">
+                    <label className="text-xs text-gray-400 font-semibold">When to Show End Screen</label>
+                    <div className="bg-gray-900/50 p-2 rounded text-xs text-gray-400 space-y-1">
+                      <p>💡 <strong>Pro Tip:</strong> Set this to your closing segment (e.g., "Thanks for watching!")</p>
+                      <p>• <strong>Video & animations are hidden</strong> during end screen</p>
+                      <p>• <strong>Audio continues playing</strong> (your voice/music)</p>
+                      <p>• <strong>End screen shows full screen</strong> with your branding</p>
+                      <p>• Perfect for outro sections with subscribe calls</p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-400 w-16">Start:</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={endScreenStartTime ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            onEndScreenStartTimeChange(val ? parseFloat(val) : undefined);
+                          }}
+                          className="flex-1 bg-gray-950 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:border-purple-500 outline-none"
+                          placeholder="e.g., 25.5"
+                        />
+                        <span className="text-xs text-gray-500">sec</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-400 w-16">End:</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={endScreenEndTime ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            onEndScreenEndTimeChange(val ? parseFloat(val) : undefined);
+                          }}
+                          className="flex-1 bg-gray-950 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:border-purple-500 outline-none"
+                          placeholder="Leave empty for video end"
+                        />
+                        <span className="text-xs text-gray-500">sec</span>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            // Use the last SRT item's time as a smart default
+                            if (srtData && srtData.length > 0) {
+                              const lastItem = srtData[srtData.length - 1];
+                              onEndScreenStartTimeChange(lastItem.startTime);
+                              onEndScreenEndTimeChange(undefined);
+                            }
+                          }}
+                          className="flex-1 py-1.5 px-3 bg-gray-700 hover:bg-gray-600 rounded text-xs text-white transition-colors"
+                        >
+                          Use Last Subtitle
+                        </button>
+                        <button
+                          onClick={() => {
+                            onEndScreenStartTimeChange(undefined);
+                            onEndScreenEndTimeChange(undefined);
+                          }}
+                          className="py-1.5 px-3 bg-gray-700 hover:bg-gray-600 rounded text-xs text-white transition-colors"
+                          title="Clear time range"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Smart Detection Alert */}
+                    {suggestedEndScreenTime !== null && endScreenStartTime === undefined && (
+                      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-2.5 text-xs text-yellow-300">
+                        <div className="flex items-start gap-2">
+                          <Sparkles size={14} className="flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="font-semibold mb-1">Closing detected!</p>
+                            <p className="text-yellow-300/80 mb-2">
+                              Found closing phrases in your video around {suggestedEndScreenTime.toFixed(1)}s
+                            </p>
+                            <button
+                              onClick={() => {
+                                onEndScreenStartTimeChange(suggestedEndScreenTime);
+                                onEndScreenEndTimeChange(undefined);
+                              }}
+                              className="py-1 px-2.5 bg-yellow-500/20 hover:bg-yellow-500/30 rounded text-yellow-200 font-medium transition-colors"
+                            >
+                              Use for End Screen
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {endScreenStartTime !== undefined && (
+                      <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2 text-xs text-blue-300">
+                        ✓ End screen will show from {endScreenStartTime.toFixed(1)}s
+                        {endScreenEndTime ? ` to ${endScreenEndTime.toFixed(1)}s` : ' until video ends'}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

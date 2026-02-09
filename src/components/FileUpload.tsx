@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, FileVideo, FileText, ArrowRight, Download, ExternalLink, Music, Wand2, Mic, Play, FileAudio, Disc, Video, Clapperboard, Sparkles, CheckSquare, Edit2, Save, X, Headphones, Trash2, ArrowLeft, BookOpen, Globe, Github, Linkedin, Instagram, Facebook } from 'lucide-react';
+import { Upload, FileVideo, FileText, ArrowRight, Download, ExternalLink, Music, Wand2, Mic, Play, FileAudio, Disc, Video, Clapperboard, Sparkles, CheckSquare, Edit2, Save, X, Headphones, Trash2, ArrowLeft, BookOpen, Globe, Github, Linkedin, Instagram, Facebook, VideoIcon } from 'lucide-react';
 import { extractWavFromVideo } from '@/src/utils/audioHelpers.ts';
 import { generateSRT, generateTTS } from '@/src/services/geminiService.ts';
+import { VideoRecorder } from '@/src/components/VideoRecorder';
 
 interface FileUploadProps {
   onFilesSelected: (videoFile: File, srtFile: File, isAudioOnly: boolean) => void;
@@ -26,11 +27,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, apiKey,
 
   const [srtContent, setSrtContent] = useState<string>(""); // For editing
   const [isEditingSrt, setIsEditingSrt] = useState(false);
+  const [subtitleLanguage, setSubtitleLanguage] = useState<'english' | 'hinglish'>('english');
 
   // --- Video Mode State ---
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isAutoGeneratingSRT, setIsAutoGeneratingSRT] = useState(false);
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   
   // --- Audio/TTS Mode State ---
   const [audioSourceType, setAudioSourceType] = useState<'upload' | 'tts'>('upload');
@@ -132,7 +135,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, apiKey,
     generationActiveRef.current = true;
 
     try {
-      const srtString = await generateSRT(sourceFile, apiKey);
+      const srtString = await generateSRT(sourceFile, apiKey, subtitleLanguage);
       
       // Check if cancelled during await
       if (!generationActiveRef.current) return;
@@ -220,6 +223,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, apiKey,
       setCurrentSrt(null);
   };
 
+  const handleVideoRecordingComplete = (videoBlob: Blob, videoDuration: number) => {
+    const videoFile = new File([videoBlob], `recorded-video-${Date.now()}.webm`, { type: 'video/webm' });
+    setVideoFile(videoFile);
+    setShowVideoRecorder(false);
+  };
+
   // --- Renderers ---
 
   // Reusable SRT Card Component
@@ -269,6 +278,31 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, apiKey,
                     ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center p-6 space-y-4">
                             <p className="text-gray-400 text-sm">Add Captions</p>
+                            
+                            {/* Language Selector */}
+                            <div className="flex items-center gap-2 bg-gray-800/50 rounded-lg p-2 border border-gray-700">
+                                <button
+                                    onClick={() => setSubtitleLanguage('english')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                                        subtitleLanguage === 'english' 
+                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' 
+                                            : 'text-gray-400 hover:text-white'
+                                    }`}
+                                >
+                                    English
+                                </button>
+                                <button
+                                    onClick={() => setSubtitleLanguage('hinglish')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                                        subtitleLanguage === 'hinglish' 
+                                            ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' 
+                                            : 'text-gray-400 hover:text-white'
+                                    }`}
+                                >
+                                    Hinglish
+                                </button>
+                            </div>
+                            
                             <div className="grid grid-cols-1 gap-2 w-full max-w-xs">
                                 <div className="flex gap-2 w-full">
                                     <button 
@@ -383,11 +417,16 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, apiKey,
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                         <Clapperboard size={14}/> Source Footage
                     </h3>
-                    <div className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center transition-all h-64 relative overflow-hidden group ${videoFile ? 'border-purple-500 bg-purple-900/10' : 'border-gray-700 hover:border-purple-500/50 bg-gray-900/80'}`}>
-                        <input type="file" accept="video/*" onChange={handleVideoChange} className="hidden" id="video-upload" />
-                        
-                        {videoFile ? (
-                            <div className="relative w-full h-full flex flex-col items-center justify-center z-10">
+                    <div className={`border-2 border-dashed rounded-2xl transition-all h-64 relative overflow-hidden ${videoFile ? 'border-purple-500 bg-purple-900/10' : 'border-gray-700 bg-gray-900/80'}`}>
+                        {showVideoRecorder ? (
+                            /* Video Recorder Mode */
+                            <VideoRecorder
+                                onRecordingComplete={handleVideoRecordingComplete}
+                                onCancel={() => setShowVideoRecorder(false)}
+                            />
+                        ) : videoFile ? (
+                            /* Video Selected */
+                            <div className="relative w-full h-full flex flex-col items-center justify-center z-10 p-6">
                                 <button 
                                     onClick={handleRemoveVideo}
                                     className="absolute top-[-10px] right-[-10px] p-2 bg-gray-800 hover:bg-red-500 hover:text-white rounded-full text-gray-400 transition-colors shadow-lg"
@@ -409,15 +448,28 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, apiKey,
                                 </button>
                             </div>
                         ) : (
-                            <label htmlFor="video-upload" className="cursor-pointer flex flex-col items-center space-y-4 w-full h-full justify-center z-10">
+                            /* No Video - Show Options */
+                            <div className="flex flex-col items-center justify-center w-full h-full p-6 space-y-4 group">
+                                <input type="file" accept="video/*" onChange={handleVideoChange} className="hidden" id="video-upload" />
+                                
                                 <div className="p-4 rounded-full bg-gray-800 text-purple-400 group-hover:scale-110 transition-transform duration-300">
                                     <FileVideo size={32} />
                                 </div>
-                                <div className="text-center">
-                                    <p className="font-bold text-lg text-white">Select Video</p>
-                                    <p className="text-xs text-gray-500 mt-1">MP4, MOV, WEBM</p>
+                                <p className="text-gray-400 text-sm text-center">Add Video</p>
+                                
+                                <div className="flex flex-col gap-2 w-full max-w-xs">
+                                    <label htmlFor="video-upload" className="cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-purple-500 bg-purple-600/10 text-purple-300 hover:bg-purple-600 hover:text-white transition-all font-medium text-sm">
+                                        <Upload size={16} /> Upload File
+                                    </label>
+                                    
+                                    <button 
+                                        onClick={() => setShowVideoRecorder(true)}
+                                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors font-medium text-sm"
+                                    >
+                                        <VideoIcon size={16} /> Record Video
+                                    </button>
                                 </div>
-                            </label>
+                            </div>
                         )}
                     </div>
                     </div>
@@ -558,47 +610,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, apiKey,
       </div>
 
       {/* Footer - Fixed Bottom */}
-      <div className="border-t border-gray-800 bg-gray-950 p-8 w-full shrink-0 z-20">
-            <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-6">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-[2px]">
-                  <a href="https://prasannathapa.in" target="_blank">
-                  <img src="https://blog.prasannathapa.in/content/images/2024/12/Picsart_24-12-18_08-13-50-070.jpg" alt="Prasanna Thapa" className="rounded-full w-full h-full object-cover bg-black" />
-                  </a>
-                </div>
-                <div>
-                  <div className="font-bold text-white text-base text-xl">Prasanna Thapa</div>
-                  <div className="text-s text-gray-400 flex items-center gap-1.5">
-                    Technical Architect
-                    <div className="hidden md:block w-px h-4 bg-gray-700/50"></div>
-                    <a href="https://zoho.com" target="_blank">
-                    <img src="https://www.zohowebstatic.com/sites/default/files/zoho_general_pages/zoho-logo-white.png" alt="Zoho" className="h-5" />
-                    </a>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex flex-wrap justify-center gap-4 items-center">
-                <a href="https://blog.prasannathapa.in/reel-composer/" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 rounded-full bg-purple-900/20 text-purple-400 hover:bg-purple-900/40 hover:text-white transition-colors text-sm font-medium border border-purple-500/30">
-                  <BookOpen size={14} /> The Philosophy
-                </a>
-                <a href="https://github.com/prasannathapa/reel-composer" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition-colors text-sm font-medium border border-gray-700">
-                  <Github size={14} /> Source Code
-                </a>
-                <div className="hidden md:block w-px h-4 bg-gray-700/50"></div>
-                <a href="https://prasannathapa.in/" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-purple-400 transition-colors" title="Website">
-                <Globe size={20} />
-                </a>
-                <a href="https://github.com/prasannathapa" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white transition-colors" title="GitHub">
-                <Github size={20} />
-                </a>
-                <a href="https://www.linkedin.com/in/prasannathapa" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-400 transition-colors" title="LinkedIn">
-                <Linkedin size={20} />
-                </a>
-                <a href="https://instagram.com/prasanna_thapa" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-pink-400 transition-colors" title="Instagram">
-                <Instagram size={20} />
-                </a>
-              </div>
+      <div className="border-t border-gray-800 bg-gray-950 p-6 w-full shrink-0 z-20">
+            <div className="max-w-5xl mx-auto text-center">
+              <p className="text-gray-400 text-sm">
+                Built by <span className="text-purple-400 font-semibold">Prithvi</span> · Software Engineer
+              </p>
             </div>
           </div>
     </div>

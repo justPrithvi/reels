@@ -1,0 +1,11 @@
+# Assets Directory
+
+Place your profile photos and other static assets here.
+
+Example:
+- profile.jpg
+- profile.png
+- logo.png
+- etc.
+
+These will be accessible at: /assets/profile.jpg
