@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { LayoutConfigStep, SRTItem } from '@/types.ts';
-import { Play, Pause, RefreshCw, Maximize, Minimize, Video, StopCircle, X, AlertTriangle, Monitor } from 'lucide-react';
+import { Play, Pause, RefreshCw, Maximize, Minimize, Video, StopCircle, X, AlertTriangle, Monitor, Download } from 'lucide-react';
 import { EndScreen } from '@/src/components/EndScreen.tsx';
+import { exportCompositeVideo } from '@/src/utils/videoCompositor';
 
 interface ReelPlayerProps {
   videoUrl: string;
@@ -72,6 +73,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [showExportInfo, setShowExportInfo] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [videoEnded, setVideoEnded] = useState(false);
 
@@ -585,56 +587,46 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   };
 
   const startRecording = async () => {
-    try {
-      const mimeType = getSupportedMimeType();
-      if (!mimeType) {
-        alert("Your browser does not support valid video recording formats.");
-        return;
-      }
+    if (!videoRef.current) {
+      alert('Video not loaded');
+      return;
+    }
 
+    try {
+      setIsRecording(true);
+      setExportProgress(0);
+
+      // Switch to fullscreen for better capture
       if (!fullScreenMode) {
         toggleFullScreen();
         await new Promise(r => setTimeout(r, 500));
       }
 
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: "browser" },
-        audio: true,
-        preferCurrentTab: true,
-      } as any);
-
-      const recorder = new MediaRecorder(stream, { mimeType });
-      const chunks: BlobPart[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-        a.download = `reel-export-${Date.now()}.${ext}`;
-        a.click();
-
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      setIsRecording(true);
-
+      // Reset video and iframe
       if (videoRef.current) {
         videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(e => console.warn("Auto-play blocked", e));
-        setIframeKey(prev => prev + 1); // Also reset iframe on recording start
+        setIframeKey(prev => prev + 1);
+        await new Promise(r => setTimeout(r, 300)); // Wait for iframe reset
       }
 
-    } catch (err) {
-      console.error("Recording failed", err);
+      // Start export
+      await exportCompositeVideo({
+        videoElement: videoRef.current,
+        onProgress: (progress) => {
+          setExportProgress(progress);
+        }
+      });
+
+      // Success
+      alert('✅ Video exported successfully!');
       setIsRecording(false);
+      setExportProgress(0);
+
+    } catch (err: any) {
+      console.error("Export failed:", err);
+      alert(`❌ Export failed: ${err.message}`);
+      setIsRecording(false);
+      setExportProgress(0);
     }
   };
 
@@ -785,55 +777,62 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
         </div>
       )}
 
-      {/* Export Information Modal */}
+      {/* Export Modal */}
       {showExportInfo && (
-        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full shadow-2xl relative">
+        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+           <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-2xl p-8 max-w-lg w-full shadow-2xl relative">
               <button
                 onClick={() => setShowExportInfo(false)}
-                className="absolute top-4 right-4 text-gray-500 hover:text-white"
+                className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
               >
-                <X size={20} />
+                <X size={24} />
               </button>
 
-              <div className="flex items-center gap-3 mb-4 text-amber-500">
-                <AlertTriangle size={24} />
-                <h3 className="text-lg font-bold text-white">Export Unavailable</h3>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-pink-600 rounded-xl flex items-center justify-center">
+                  <Video size={24} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-white">Export Video</h3>
+                  <p className="text-sm text-gray-400">High-quality video with animations</p>
+                </div>
               </div>
 
-              <p className="text-gray-300 text-sm mb-4 leading-relaxed">
-                Server-side FFmpeg recording is currently <strong>disabled</strong> for the Public Preview.
-              </p>
-
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg mb-6 text-xs text-red-200 font-mono">
-                 "Running video rendering for everyone for free would melt my servers! 🔥"
-              </div>
-
-              <div className="bg-black/40 p-4 rounded-lg border border-gray-800 mb-6">
-                <h4 className="font-bold text-white text-sm mb-2 flex items-center gap-2">
-                   <Monitor size={14} className="text-purple-400"/> Recommendation:
+              <div className="bg-black/40 p-5 rounded-xl border border-gray-800 mb-6">
+                <h4 className="font-bold text-white text-base mb-3 flex items-center gap-2">
+                   <AlertTriangle size={16} className="text-yellow-400"/> How Export Works
                 </h4>
-                <p className="text-xs text-gray-400">
-                  Use <strong>OBS Studio</strong> or your system's screen recorder to capture the playback in high quality.
+                <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside">
+                  <li>Click "Start Export" below</li>
+                  <li>Select <strong>this browser tab</strong> when prompted</li>
+                  <li>Video will play automatically with animations</li>
+                  <li>Download starts when playback finishes</li>
+                </ol>
+              </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 mb-6">
+                <p className="text-xs text-blue-200 flex items-start gap-2">
+                  <Video size={14} className="mt-0.5 shrink-0" />
+                  <span>Includes original audio, all animations, subtitles, and end screen.</span>
                 </p>
               </div>
 
-              <div className="flex flex-col gap-3">
-                 <button
-                   onClick={() => setShowExportInfo(false)}
-                   className="w-full py-3 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm"
-                 >
-                   Got it, I'll use OBS
-                 </button>
-
+              <div className="flex gap-3">
                  <button
                    onClick={() => {
                      setShowExportInfo(false);
                      startRecording();
                    }}
-                   className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+                   className="flex-1 py-3 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white font-bold rounded-lg transition-all text-sm shadow-lg shadow-red-900/30"
                  >
-                   Try Browser Recorder (Experimental/Client-Side)
+                   Start Export
+                 </button>
+
+                 <button
+                   onClick={() => setShowExportInfo(false)}
+                   className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors text-sm"
+                 >
+                   Cancel
                  </button>
               </div>
            </div>
@@ -842,19 +841,33 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
 
       {isRecording && (
         <div className="fixed top-4 right-4 z-[100]">
-           <button
-            onClick={stopRecording}
-            className="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-full font-bold shadow-2xl animate-pulse"
-          >
-            <StopCircle size={20} />
-            Stop Recording
-          </button>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 shadow-2xl min-w-[300px]">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+              <span className="text-white font-bold">Exporting Video...</span>
+            </div>
+            
+            <div className="w-full bg-gray-800 rounded-full h-2 mb-2 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-red-600 to-pink-600 h-full transition-all duration-300"
+                style={{ width: `${exportProgress}%` }}
+              ></div>
+            </div>
+            
+            <div className="text-sm text-gray-400 text-center">
+              {exportProgress < 100 ? `${Math.round(exportProgress)}%` : 'Finalizing...'}
+            </div>
+            
+            <p className="text-xs text-gray-500 mt-3 text-center">
+              Do not close this tab
+            </p>
+          </div>
         </div>
       )}
 
-       <div className="mt-2 text-gray-500 text-sm">
+       <div className="mt-2 text-gray-500 text-sm text-center">
          {!isRecording && fullScreenMode && "Press ESC to exit fullscreen"}
-         {isRecording && "Recording in progress... content will auto-download on finish."}
+         {isRecording && "Video is playing and recording. Download will start automatically when finished."}
        </div>
     </div>
   );
